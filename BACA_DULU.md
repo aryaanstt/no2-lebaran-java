@@ -47,6 +47,10 @@ pustaka peta tambahan.
 Kalau ingin dijalankan di komputer sendiri, `python Script/analisis_no2_lebaran.py`
 memberi hasil yang sama persis.
 
+Dasbor interaktif (peta anomali tiap kabupaten dan kota) ada di `docs/`, daring di
+https://aryaanstt.github.io/no2-lebaran-java/, dan datanya dibuat ulang dengan
+`python Script/buat_dashboard.py`.
+
 ## Angka utama sebagai pemeriksa
 
 Kalau notebook berjalan benar, keluarannya memuat angka berikut, sama seperti di

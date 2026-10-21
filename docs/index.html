@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NO₂ over Java during Lebaran</title>
+<link rel="icon" href="data:,">
+<meta name="description" content="Interactive map of tropospheric NO₂ change over 117 regencies and cities in Java during Lebaran (Eid al-Fitr), 2019–2025, from Sentinel-5P.">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --accent: #2a78d6;
+    --down-3: #104281; --down-2: #3987e5; --down-1: #b7d3f6;
+    --mid: #e8e7e2;
+    --up-1: #f6c2bb; --up-2: #e34948; --up-3: #9e2324;
+    --nodata: #b9b8b0;
+    --bar-down: #2a78d6; --bar-up: #e34948;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --accent: #3987e5;
+      --down-3: #cde2fb; --down-2: #5598e7; --down-1: #184f95;
+      --mid: #383835;
+      --up-1: #7d2a2a; --up-2: #e66767; --up-3: #f6c2bb;
+      --nodata: #5c5b56;
+      --bar-down: #3987e5; --bar-up: #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --accent: #3987e5;
+    --down-3: #cde2fb; --down-2: #5598e7; --down-1: #184f95;
+    --mid: #383835;
+    --up-1: #7d2a2a; --up-2: #e66767; --up-3: #f6c2bb;
+    --nodata: #5c5b56;
+    --bar-down: #3987e5; --bar-up: #e66767;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1180px; margin: 0 auto; padding: 28px 16px 48px; }
+  h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { font-size: 1rem; margin: 0 0 4px; }
+  p { margin: 0 0 10px; }
+  a { color: var(--accent); }
+  .lede { color: var(--ink-2); max-width: 70ch; }
+  .small { font-size: 0.85rem; color: var(--ink-2); }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 22px 0;
+  }
+  .stat .value { font-size: 1.7rem; font-weight: 650; line-height: 1.15; }
+  .stat .label { font-size: 0.85rem; color: var(--ink-2); margin-top: 4px; }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center;
+    margin-bottom: 12px;
+  }
+  .controls .group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .controls .name { font-size: 0.85rem; color: var(--ink-2); margin-right: 4px; }
+  .seg {
+    display: inline-flex; flex-wrap: wrap;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    background: var(--surface);
+  }
+  .seg button {
+    font: inherit; font-size: 0.85rem; color: var(--ink);
+    background: transparent; border: 0; padding: 6px 11px; cursor: pointer;
+    border-right: 1px solid var(--border);
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button:hover { background: var(--grid); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); font-weight: 600; }
+
+  /* Java is about three times wider than it is tall, so the map takes the full width */
+  #map { width: 100%; aspect-ratio: 2.5 / 1; min-height: 240px; }
+  #regionChart, #javaChart { height: 290px; }
+  .panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; align-items: baseline; }
+  .hint { font-size: 0.8rem; color: var(--muted); }
+
+  .below { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; }
+  .below > .card { min-width: 0; }
+  .ranks-card { margin-top: 14px; }
+  .ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { text-align: left; font-weight: 600; color: var(--ink-2); padding: 4px 0; border-bottom: 1px solid var(--axis); }
+  td { padding: 4px 0; border-bottom: 1px solid var(--grid); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 8px; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover td { background: var(--grid); }
+  .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+
+  .method { margin-top: 14px; }
+  .method ul { margin: 6px 0 0; padding-left: 20px; color: var(--ink-2); font-size: 0.9rem; }
+  footer { margin-top: 22px; font-size: 0.85rem; color: var(--muted); }
+  .error { color: var(--up-2); }
+
+  @media (max-width: 860px) {
+    .below { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 520px) {
+    h1 { font-size: 1.4rem; }
+    .stat .value { font-size: 1.4rem; }
+    .ranks { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>How much does NO₂ over Java drop during Lebaran?</h1>
+    <p class="lede">
+      Lebaran (Eid al-Fitr) is Indonesia's largest annual movement of people. Nitrogen dioxide (NO₂)
+      comes mostly from burning fuel and lasts only hours in the air, so it reacts quickly when traffic
+      and industry slow down. This dashboard shows how the Sentinel-5P tropospheric NO₂ column changed
+      over Java's 117 regencies and cities during Lebaran, 2019–2025. Each year is compared with normal
+      days in the same season of that year, because Eid moves about 11 days earlier every year.
+    </p>
+    <p class="small">
+      Undergraduate thesis, Meteorology, Institut Teknologi Bandung (2026), by Arya Perdana Putra Nasution ·
+      <a href="https://github.com/aryaanstt/no2-lebaran-java">code and data on GitHub</a>
+    </p>
+  </header>
+
+  <section class="stats" id="stats" aria-label="Key numbers"></section>
+
+  <section class="controls" aria-label="Map options">
+    <div class="group">
+      <span class="name" id="yearLabel">Year</span>
+      <div class="seg" id="yearButtons" role="group" aria-labelledby="yearLabel"></div>
+    </div>
+    <div class="group">
+      <span class="name" id="periodLabel">Period</span>
+      <div class="seg" id="periodButtons" role="group" aria-labelledby="periodLabel"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="panel-head">
+      <h2 id="mapTitle">NO₂ anomaly</h2>
+      <span class="hint">Hover for values, click a region for its yearly chart</span>
+    </div>
+    <p class="small" id="mapNote"></p>
+    <div id="map" role="img" aria-label="Choropleth map of NO2 anomaly per regency and city in Java"></div>
+  </section>
+
+  <section class="below">
+    <div class="card">
+      <h2 id="regionTitle">Region</h2>
+      <p class="small" id="regionNote"></p>
+      <div id="regionChart"></div>
+    </div>
+    <div class="card">
+      <h2 id="javaTitle">Java-wide anomaly per year</h2>
+      <p class="small" id="javaNote"></p>
+      <div id="javaChart"></div>
+    </div>
+  </section>
+
+  <section class="card ranks-card">
+      <h2 id="rankTitle">Largest changes</h2>
+      <p class="small">Same selection as the map. Click a row to open that region.</p>
+      <div class="ranks">
+        <table aria-label="Largest decreases">
+          <thead><tr><th>Largest decreases</th><th class="num">Anomaly</th></tr></thead>
+          <tbody id="rankDown"></tbody>
+        </table>
+        <table aria-label="Largest increases">
+          <thead><tr><th>Largest increases</th><th class="num">Anomaly</th></tr></thead>
+          <tbody id="rankUp"></tbody>
+        </table>
+      </div>
+  </section>
+
+  <section class="card method">
+    <h2>How the numbers are made</h2>
+    <ul>
+      <li><b>Data:</b> daily Sentinel-5P TROPOMI tropospheric NO₂ column (<code>COPERNICUS/S5P/OFFL/L3_NO2</code>), averaged per regency and city (FAO GAUL 2015 level 2) in Google Earth Engine. Negative retrievals are removed before averaging.</li>
+      <li><b>Periods:</b> homecoming H−7 to H0, return H+1 to H+7, combined H−7 to H+7, where H0 is Eid day. Reference (normal days): H−60 to H−31 and H+30 to H+59 of the same year.</li>
+      <li><b>Anomaly:</b> (Lebaran − reference) / reference × 100%, per region and year. The 7-year mean is the mean of the seven yearly anomalies. The Java value is the unweighted mean over the 117 regions.</li>
+      <li><b>Significance:</b> Wilcoxon signed-rank test on the seven yearly values, exact distribution. DKI Jakarta in the key numbers is the whole province as one area; on the map it appears as its five cities.</li>
+      <li><b>Limits:</b> the satellite sees the whole tropospheric column at about 13:30 local time, not ground-level air, and clouds leave gaps (grey regions have no valid data in that window). Polygons are simplified for the web.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Regenerate the data with <code>python Script/buat_dashboard.py</code>, which rebuilds <code>docs/data.js</code>
+    from <code>Data/01_mentah</code> and checks every number against <code>Data/02_olahan</code>.
+  </footer>
+</main>
+
+<script src="data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var D = window.NO2_DATA;
+  if (!D || !window.Plotly) {
+    document.getElementById("map").innerHTML =
+      '<p class="error">Could not load ' + (D ? "the chart library (check your internet connection)" : "data.js") + ".</p>";
+    return;
+  }
+
+  var YEARS = D.tahun;
+  var N = D.wilayah.length;
+  var state = { year: "mean", period: "gab", region: D.wilayah.indexOf("Kota Surabaya") };
+  var PLOT_CONFIG = { displayModeBar: false, responsive: true };
+
+  // ---------- formatting
+  function pct(v, digits) {
+    if (v === null || v === undefined) return "no data";
+    var s = Math.abs(v).toFixed(digits === undefined ? 1 : digits);
+    if (Number(s) === 0) return s + "%";
+    return (v < 0 ? "−" : "+") + s + "%";
+  }
+  function num(v) { return v === null || v === undefined ? "no data" : v.toFixed(2); }
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function periodName(p) { return D.periode[p].nama.toLowerCase() + " (" + D.periode[p].jendela + ")"; }
+  function selectionLabel() { return state.year === "mean" ? "2019–2025 mean" : String(state.year); }
+
+  // ---------- values for the current selection
+  function current() {
+    var v = D.nilai[state.period];
+    if (state.year === "mean") return { anom: v.anom_rerata, ref: v.acuan_rerata, leb: v.lebaran_rerata };
+    var i = YEARS.indexOf(state.year);
+    return {
+      anom: v.anom.map(function (r) { return r[i]; }),
+      ref: v.acuan.map(function (r) { return r[i]; }),
+      leb: v.lebaran.map(function (r) { return r[i]; })
+    };
+  }
+
+  // ---------- key numbers
+  function renderStats() {
+    var k = D.angka_utama;
+    var tiles = [
+      [pct(k.sejawa_gab, 2), "mean NO₂ change across " + k.jumlah_wilayah + " regions, combined Lebaran period, 2019–2025"],
+      [k.tahun_turun + " of 7", "years with a Java-wide decrease (Wilcoxon exact p = " + k.p_sejawa + ")"],
+      [pct(k.dki), "DKI Jakarta, whole province (" + k.dki_turun + " of 7 years down, p = " + k.dki_p + ")"],
+      [pct(k.surabaya), "Surabaya City (" + k.surabaya_turun + " of 7 years down, p = " + k.surabaya_p + ")"],
+      [k.wilayah_naik + " of " + k.jumlah_wilayah, "regions where NO₂ was higher than normal on average, against the Java-wide drop"]
+    ];
+    document.getElementById("stats").innerHTML = tiles.map(function (t) {
+      return '<div class="card stat"><div class="value">' + t[0] + '</div><div class="label">' + t[1] + "</div></div>";
+    }).join("");
+  }
+
+  // ---------- controls
+  function makeButtons(id, items, key) {
+    var box = document.getElementById(id);
+    box.innerHTML = "";
+    items.forEach(function (it) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = it.label;
+      b.setAttribute("aria-pressed", String(state[key] === it.value));
+      b.addEventListener("click", function () {
+        state[key] = it.value;
+        Array.prototype.forEach.call(box.children, function (c, j) {
+          c.setAttribute("aria-pressed", String(items[j].value === it.value));
+        });
+        renderAll();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  // ---------- map
+  function colorscale() {
+    return [
+      [0, css("--down-3")], [0.25, css("--down-2")], [0.45, css("--down-1")],
+      [0.5, css("--mid")],
+      [0.55, css("--up-1")], [0.75, css("--up-2")], [1, css("--up-3")]
+    ];
+  }
+
+  function renderMap() {
+    var c = current();
+    var lim = state.year === "mean" ? 30 : 50;
+    var withData = [], noData = [];
+    for (var i = 0; i < N; i++) (c.anom[i] === null ? noData : withData).push(i);
+    var lebLabel = "Lebaran NO₂, " + D.periode[state.period].nama.toLowerCase();
+    var unit = " ×10⁻⁵ mol/m²";
+    var meanNote = state.year === "mean" ? "<br><span style='font-size:11px'>mean of the seven yearly anomalies</span>" : "";
+
+    var base = {
+      type: "choropleth", geojson: D.geojson, featureidkey: "id",
+      locations: noData.map(function (i) { return D.wilayah[i]; }),
+      z: noData.map(function () { return 0; }),
+      customdata: noData.map(function (i) { return [D.provinsi[i]]; }),
+      colorscale: [[0, css("--nodata")], [1, css("--nodata")]], showscale: false,
+      marker: { line: { color: css("--surface"), width: 0.6 } },
+      hovertemplate: "<b>%{location}</b> (%{customdata[0]})<br>no valid satellite data in this window<extra></extra>"
+    };
+    var main = {
+      type: "choropleth", geojson: D.geojson, featureidkey: "id",
+      locations: withData.map(function (i) { return D.wilayah[i]; }),
+      z: withData.map(function (i) { return Math.max(-lim, Math.min(lim, c.anom[i])); }),
+      customdata: withData.map(function (i) {
+        return [D.provinsi[i], num(c.ref[i]), num(c.leb[i]), pct(c.anom[i])];
+      }),
+      zmin: -lim, zmax: lim, zmid: 0,
+      colorscale: colorscale(),
+      marker: { line: { color: css("--surface"), width: 0.6 } },
+      colorbar: {
+        title: { text: "anomaly", side: "top", font: { size: 12, color: css("--ink-2") } },
+        orientation: "h", x: 0.5, xanchor: "center", y: -0.02, yanchor: "top",
+        thickness: 10, len: 0.6, outlinewidth: 0,
+        tickvals: [-lim, -lim / 2, 0, lim / 2, lim],
+        ticktext: ["≤−" + lim + "%", "−" + lim / 2 + "%", "0", "+" + lim / 2 + "%", "≥+" + lim + "%"],
+        tickfont: { size: 11, color: css("--ink-2") }
+      },
+      hovertemplate: "<b>%{location}</b> (%{customdata[0]})<br>" +
+        "Reference NO₂: %{customdata[1]}" + unit + "<br>" +
+        lebLabel + ": %{customdata[2]}" + unit + "<br>" +
+        "Anomaly: <b>%{customdata[3]}</b>" + meanNote + "<extra></extra>"
+    };
+    var provinces = {
+      type: "scattergeo", mode: "lines", lon: D.batas_provinsi.lon, lat: D.batas_provinsi.lat,
+      line: { color: css("--ink-2"), width: 0.8 }, hoverinfo: "skip", showlegend: false
+    };
+    var sel = state.region;
+    var highlight = {
+      type: "choropleth", geojson: D.geojson, featureidkey: "id",
+      locations: [D.wilayah[sel]], z: [0],
+      colorscale: [[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]], showscale: false,
+      marker: { line: { color: css("--ink"), width: 2 } }, hoverinfo: "skip"
+    };
+    var layout = {
+      geo: {
+        // fixed frame around Java, Madura and the small islands (Seribu, Karimunjawa, Bawean, Kangean)
+        visible: false, projection: { type: "mercator" },
+        lonaxis: { range: [105.05, 116.35] }, lataxis: { range: [-8.85, -5.15] },
+        bgcolor: "rgba(0,0,0,0)"
+      },
+      margin: { l: 0, r: 0, t: 0, b: 40 },
+      paper_bgcolor: "rgba(0,0,0,0)",
+      showlegend: false,
+      hoverlabel: { bgcolor: css("--surface"), bordercolor: css("--axis"), font: { color: css("--ink"), size: 12 } },
+      font: { family: "system-ui, -apple-system, Segoe UI, sans-serif" }
+    };
+    Plotly.react("map", [base, main, provinces, highlight], layout, PLOT_CONFIG);
+
+    document.getElementById("mapTitle").textContent = "NO₂ anomaly, " + selectionLabel() + ", " + D.periode[state.period].nama.toLowerCase() + " period";
+    document.getElementById("mapNote").textContent =
+      "Change during " + periodName(state.period) + " relative to normal days of the same season. Blue = less NO₂ than normal, red = more." +
+      (noData.length ? " Grey = no valid data (" + noData.length + " region" + (noData.length > 1 ? "s" : "") + ")." : "");
+  }
+
+  // ---------- bar charts
+  function barTrace(values, name, hoverName) {
+    var colors = values.map(function (v) { return v !== null && v > 0 ? css("--bar-up") : css("--bar-down"); });
+    var opac = YEARS.map(function (y) { return state.year === "mean" || state.year === y ? 1 : 0.4; });
+    return {
+      type: "bar", x: YEARS.map(String), y: values, name: name,
+      marker: { color: colors, opacity: opac, line: { width: 0 }, cornerradius: 4 },
+      customdata: values.map(function (v) { return pct(v); }),
+      hovertemplate: hoverName + " %{x}: <b>%{customdata}</b><extra></extra>"
+    };
+  }
+
+  function barLayout(values, meanValue, meanLabel, digits) {
+    var all = values.filter(function (v) { return v !== null; }).concat([meanValue, 0]);
+    var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+    var pad = Math.max(3, (hi - lo) * 0.12);
+    return {
+      margin: { l: 44, r: 10, t: 10, b: 30 },
+      paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+      bargap: 0.35,
+      font: { family: "system-ui, -apple-system, Segoe UI, sans-serif", color: css("--ink-2"), size: 12 },
+      xaxis: { type: "category", tickfont: { color: css("--muted") }, linecolor: css("--axis"), fixedrange: true },
+      yaxis: {
+        ticksuffix: "%", gridcolor: css("--grid"), zeroline: true, zerolinecolor: css("--axis"),
+        zerolinewidth: 1, tickfont: { color: css("--muted") }, range: [lo - pad, hi + pad], fixedrange: true
+      },
+      showlegend: true,
+      legend: { orientation: "h", x: 0, y: 1.08, yanchor: "bottom", font: { size: 11, color: css("--ink-2") } },
+      hoverlabel: { bgcolor: css("--surface"), bordercolor: css("--axis"), font: { color: css("--ink"), size: 12 } },
+      shapes: [{
+        type: "line", xref: "paper", x0: 0, x1: 1, y0: meanValue, y1: meanValue,
+        line: { color: css("--ink"), width: 1.5 }
+      }],
+      annotations: [{
+        xref: "paper", x: 1, y: meanValue, yanchor: meanValue < 0 ? "top" : "bottom", xanchor: "right",
+        text: meanLabel + " " + pct(meanValue, digits), showarrow: false,
+        font: { size: 11, color: css("--ink") }, bgcolor: css("--surface"), borderpad: 2
+      }]
+    };
+  }
+
+  function renderRegion() {
+    var i = state.region, v = D.nilai[state.period];
+    var values = v.anom[i];
+    var java = D.sejawa[state.period].per_tahun;
+    var bars = barTrace(values, D.wilayah[i], D.wilayah[i] + ",");
+    bars.showlegend = false;
+    var javaMarks = {
+      type: "scatter", mode: "markers", x: YEARS.map(String), y: java, name: "Java average (same year)",
+      marker: { symbol: "line-ew-open", size: 22, line: { width: 2, color: css("--muted") }, color: css("--muted") },
+      customdata: java.map(function (x) { return pct(x); }),
+      hovertemplate: "Java average %{x}: %{customdata}<extra></extra>"
+    };
+    var layout = barLayout(values.concat(java), v.anom_rerata[i], "7-year mean");
+    Plotly.react("regionChart", [bars, javaMarks], layout, PLOT_CONFIG);
+    document.getElementById("regionTitle").textContent = D.wilayah[i] + ", " + D.provinsi[i];
+    var down = values.filter(function (x) { return x !== null && x < 0; }).length;
+    var valid = values.filter(function (x) { return x !== null; }).length;
+    document.getElementById("regionNote").textContent =
+      "Anomaly per year, " + periodName(state.period) + ". Lower than normal in " + down + " of " + valid +
+      " years with data. Reference NO₂ " + num(v.acuan_rerata[i]) + " ×10⁻⁵ mol/m² (2019–2025 mean).";
+  }
+
+  function renderJava() {
+    var j = D.sejawa[state.period];
+    var bars = barTrace(j.per_tahun, "Java", "Java,");
+    bars.showlegend = false;
+    var layout = barLayout(j.per_tahun, j.rerata, "7-year mean", 2);
+    layout.showlegend = false;
+    layout.margin.t = 6;
+    Plotly.react("javaChart", [bars], layout, PLOT_CONFIG);
+    document.getElementById("javaTitle").textContent = "Java-wide anomaly per year, " + D.periode[state.period].nama.toLowerCase() + " period";
+    document.getElementById("javaNote").textContent =
+      "Unweighted mean over " + N + " regions. Lower than normal in " + j.turun + " of 7 years, mean " +
+      pct(j.rerata, 2) + " (Wilcoxon exact p = " + j.p + "). Eid dates: " +
+      YEARS.map(function (y, k) { return y + " " + D.idul_fitri[k].slice(5).replace("-", "/"); }).join(", ") + " (month/day).";
+  }
+
+  // ---------- ranked tables (the table view of the map)
+  function renderRanks() {
+    var c = current();
+    var idx = [];
+    for (var i = 0; i < N; i++) if (c.anom[i] !== null) idx.push(i);
+    idx.sort(function (a, b) { return c.anom[a] - c.anom[b]; });
+    function rows(list) {
+      return list.map(function (i) {
+        var col = c.anom[i] > 0 ? css("--bar-up") : css("--bar-down");
+        return '<tr data-i="' + i + '"><td><span class="swatch" style="background:' + col + '"></span>' +
+          D.wilayah[i] + '</td><td class="num">' + pct(c.anom[i]) + "</td></tr>";
+      }).join("");
+    }
+    document.getElementById("rankDown").innerHTML = rows(idx.slice(0, 10));
+    document.getElementById("rankUp").innerHTML = rows(idx.slice(-10).reverse());
+    document.getElementById("rankTitle").textContent = "Largest changes, " + selectionLabel();
+  }
+
+  function selectRegion(i) {
+    if (i < 0) return;
+    state.region = i;
+    renderMap();
+    renderRegion();
+  }
+
+  function renderAll() {
+    renderMap();
+    renderRegion();
+    renderJava();
+    renderRanks();
+  }
+
+  // ---------- start
+  renderStats();
+  makeButtons("yearButtons",
+    [{ label: "2019–2025 mean", value: "mean" }].concat(YEARS.map(function (y) { return { label: String(y), value: y }; })),
+    "year");
+  makeButtons("periodButtons", ["gab", "mudik", "balik"].map(function (p) {
+    return { label: D.periode[p].nama + " (" + D.periode[p].jendela + ")", value: p };
+  }), "period");
+  renderAll();
+
+  document.getElementById("map").on("plotly_click", function (ev) {
+    var pt = ev.points && ev.points[0];
+    if (pt && pt.location) selectRegion(D.wilayah.indexOf(pt.location));
+  });
+  ["rankDown", "rankUp"].forEach(function (id) {
+    document.getElementById(id).addEventListener("click", function (ev) {
+      var tr = ev.target.closest("tr");
+      if (tr) {
+        selectRegion(Number(tr.getAttribute("data-i")));
+        document.getElementById("regionChart").scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+  });
+  if (window.matchMedia) {
+    var mq = window.matchMedia("(prefers-color-scheme: dark)");
+    if (mq.addEventListener) mq.addEventListener("change", renderAll);
+  }
+})();
+</script>
+</body>
+</html>

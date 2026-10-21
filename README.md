@@ -5,6 +5,8 @@
 Undergraduate thesis, Meteorology, Institut Teknologi Bandung (2026), by Arya Perdana Putra Nasution.
 Supervisors: Musa Ali Mustofa, S.Si., M.Si. and Rachmy Fitriani, S.Si., M.Si.
 
+**Live dashboard: [aryaanstt.github.io/no2-lebaran-java](https://aryaanstt.github.io/no2-lebaran-java/)**: an interactive map of the anomaly for every regency and city, by year and period, with a yearly chart for any region you click.
+
 ![NO₂ anomaly during Lebaran](Gambar/G4_04_anomali.png)
 *NO₂ anomaly during the 15 days of Lebaran compared with normal days, 2019–2025 average: (a) at 0.01° grid resolution, (b) per regency and city. Blue means lower NO₂ than normal. Figure labels are in Indonesian, as in the original thesis.*
 
@@ -75,6 +77,16 @@ python Script/analisis_no2_lebaran.py
 
 The script reads `Data/01_mentah`, writes tables to `Data/02_olahan` and figures to `Gambar/`. All key numbers are collected in `Data/02_olahan/ringkasan_angka.json`, and the output matches the thesis exactly.
 
+### Dashboard
+
+The dashboard is a static page in `docs/` (`index.html` plus `data.js`), served by GitHub Pages from the `/docs` folder of `main`. To rebuild its data after changing the analysis:
+
+```bash
+python Script/buat_dashboard.py
+```
+
+The script recomputes the anomalies from `Data/01_mentah` with the same formula as the analysis, checks every number against `Data/02_olahan` (it stops if anything differs), simplifies the region polygons, and writes `docs/data.js` (about 0.4 MB). Open `docs/index.html` directly in a browser to view it locally; the chart library (Plotly) loads from a CDN, so an internet connection is needed.
+
 ## Repository structure
 
 ```
@@ -86,7 +98,9 @@ The script reads `Data/01_mentah`, writes tables to `Data/02_olahan` and figures
 ├── Script/
 │   ├── ambil_data_gee.py          data extraction in Earth Engine
 │   ├── analisis_no2_lebaran.py    full analysis and figures
-│   └── analisis_no2_lebaran.ipynb same steps as a Colab notebook
+│   ├── analisis_no2_lebaran.ipynb same steps as a Colab notebook
+│   └── buat_dashboard.py          builds the dashboard data (docs/data.js)
+├── docs/               interactive dashboard (GitHub Pages)
 └── BACA_DULU.md        detailed notes in Indonesian, including figure numbering
 ```
 
@@ -100,7 +114,7 @@ The script reads `Data/01_mentah`, writes tables to `Data/02_olahan` and figures
 
 ## Tools
 
-Python (pandas, NumPy, SciPy, Matplotlib, tifffile), Google Earth Engine, Google Colab.
+Python (pandas, NumPy, SciPy, Matplotlib, tifffile), Google Earth Engine, Google Colab, Plotly.js (dashboard).
 
 ## Author
 
