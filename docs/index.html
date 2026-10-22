@@ -23,7 +23,9 @@
     --mid: #e8e7e2;
     --up-1: #f6c2bb; --up-2: #e34948; --up-3: #9e2324;
     /* sequential: NO2 column, light to dark */
-    --seq-0: #fbe9dc; --seq-1: #f6bf9c; --seq-2: #ee8d5c; --seq-3: #d95926; --seq-4: #a3401a; --seq-5: #5f2610;
+    /* sequential: NO2 column, low = light, high = dark (magma-like, lightness falls steadily so it
+       still reads under colour-blindness); the same ramp in light and dark themes */
+    --seq-0: #fcfdbf; --seq-1: #fec287; --seq-2: #fb8761; --seq-3: #e65164; --seq-4: #9e2f7f; --seq-5: #51127c;
     --nodata: #b9b8b0;
     --bar-down: #2a78d6; --bar-up: #e34948;
     --bar-ref: #77756f; --bar-leb: #eb6834;
@@ -43,7 +45,6 @@
       --down-3: #cde2fb; --down-2: #5598e7; --down-1: #184f95;
       --mid: #383835;
       --up-1: #7d2a2a; --up-2: #e66767; --up-3: #f6c2bb;
-      --seq-0: #2e231d; --seq-1: #5a2f1c; --seq-2: #94401c; --seq-3: #d95926; --seq-4: #f09a6e; --seq-5: #fbd7c2;
       --nodata: #5c5b56;
       --bar-down: #3987e5; --bar-up: #e66767;
       --bar-ref: #8f8d86; --bar-leb: #d95926;
@@ -63,7 +64,6 @@
     --down-3: #cde2fb; --down-2: #5598e7; --down-1: #184f95;
     --mid: #383835;
     --up-1: #7d2a2a; --up-2: #e66767; --up-3: #f6c2bb;
-    --seq-0: #2e231d; --seq-1: #5a2f1c; --seq-2: #94401c; --seq-3: #d95926; --seq-4: #f09a6e; --seq-5: #fbd7c2;
     --nodata: #5c5b56;
     --bar-down: #3987e5; --bar-up: #e66767;
     --bar-ref: #8f8d86; --bar-leb: #d95926;
@@ -478,8 +478,11 @@
         z: withData.map(function (i) { return Math.max(lo, Math.min(hi, Math.log10(c.value[i]))); }),
         zmin: lo, zmax: hi, colorscale: concColorscale(),
         tickvals: CONC_TICKS.map(Math.log10),
-        ticktext: CONC_TICKS.map(function (t, j) { return (j === 0 ? "≤" : j === CONC_TICKS.length - 1 ? "≥" : "") + t; }),
-        title: "NO₂ column, ×10⁻⁵ mol/m² (log scale)",
+        ticktext: CONC_TICKS.map(function (t, j) {
+          return j === 0 ? "≤" + t + "<br>lower" : j === CONC_TICKS.length - 1 ? "≥" + t + "<br>higher" : String(t);
+        }),
+        // one fixed scale for every year and period, so maps can be compared directly
+        title: "NO₂ column (×10⁻⁵ mol/m²): higher NO₂ = darker<br>same log scale for all years and periods",
         hover: p === "ref"
           ? "Reference NO₂: <b>%{customdata[1]}</b>" + UNIT
           : "NO₂, " + lebName + ": <b>%{customdata[2]}</b>" + UNIT + "<br>" +
@@ -520,12 +523,16 @@
       type: "scattergeo", mode: "lines", lon: D.batas_provinsi.lon, lat: D.batas_provinsi.lat,
       line: { color: css("--ink-2"), width: 0.8 }, hoverinfo: "skip", showlegend: false
     };
-    var highlight = {
-      type: "choropleth", geojson: D.geojson, featureidkey: "id",
-      locations: [D.wilayah[state.region]], z: [0],
-      colorscale: [[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]], showscale: false,
-      marker: { line: { color: css("--ink"), width: 2.5 } }, hoverinfo: "skip"
-    };
+    // selected region: ink outline over a wider surface-coloured halo, visible on light and dark fills alike
+    function outlineTrace(color, width) {
+      return {
+        type: "choropleth", geojson: D.geojson, featureidkey: "id",
+        locations: [D.wilayah[state.region]], z: [0],
+        colorscale: [[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]], showscale: false,
+        marker: { line: { color: color, width: width } }, hoverinfo: "skip"
+      };
+    }
+    var halo = outlineTrace(css("--surface"), 5), highlight = outlineTrace(css("--ink"), 2.2);
     var f = frame();
     var layout = {
       geo: {
@@ -535,20 +542,21 @@
       },
       dragmode: false,
       uirevision: state.zoomRev,
-      margin: { l: 0, r: 0, t: 0, b: 40 },
+      margin: { l: 0, r: 0, t: 0, b: anomMode ? 40 : 58 },
       paper_bgcolor: "rgba(0,0,0,0)",
       showlegend: false,
       hoverlabel: { bgcolor: css("--surface"), bordercolor: css("--axis"), font: { color: css("--ink"), size: 12 } },
       font: { family: FONT }
     };
-    Plotly.react("map", [base, main, provinces, highlight], layout, PLOT_CONFIG);
+    Plotly.react("map", [base, main, provinces, halo, highlight], layout, PLOT_CONFIG);
 
     document.getElementById("mapTitle").textContent = anomMode
       ? "NO₂ anomaly, " + selectionLabel() + ", " + D.periode[p].nama.toLowerCase() + " period"
       : "NO₂ column, " + selectionLabel() + ", " + periodInfo(p).nama.toLowerCase() + " period";
     document.getElementById("mapNote").textContent = (anomMode
       ? "Change during " + periodName(p) + " relative to normal days of the same season. Blue = less NO₂ than normal, red = more."
-      : "Mean tropospheric NO₂ column during " + periodName(p) + ". Darker = more NO₂.") +
+      : "Mean tropospheric NO₂ column during " + periodName(p) + ", in ×10⁻⁵ mol/m². Light = low NO₂, dark = high NO₂. " +
+        "The colour scale is fixed (logarithmic, 0.5 to 16) for every year and period, so maps can be compared.") +
       (noData.length ? " Grey = no valid data (" + noData.length + " region" + (noData.length > 1 ? "s" : "") + ")." : "");
     var zb = document.getElementById("zoomButton");
     zb.textContent = state.zoom === null ? "Zoom to " + D.wilayah[state.region] : "Show all of Java";
