@@ -127,8 +127,23 @@ tl5 = pd.read_csv(os.path.join(OLAHAN, "TL_5_peringkat_anomali.csv"))
 for _, r in tl5.iterrows():
     sama(round(REGION_RERATA["gab"][r["wilayah"]], 1), r["anomali_persen"], 1e-6, "TL_5 " + r["wilayah"])
 assert NAIK == 18, NAIK
-print("cocok dengan Data/02_olahan: se-Jawa %.2f persen, %d dari 7 tahun turun, p %.4f, %d wilayah naik"
-      % (SEJAWA["gab"]["rerata"], SEJAWA["gab"]["turun"], SEJAWA["gab"]["p"], NAIK))
+
+# kadar NO2 (mode "NO2 column" di dasbor): rerata acuan dan rerata jendela Lebaran
+ARAS = pd.Series(NO2[[f"acD_{t}" for t in TAHUN]].mean(axis=1).values * E5, index=NO2["wilayah"].values)
+ARAS_LEBARAN = pd.Series(NO2[[f"gab_{t}" for t in TAHUN]].mean(axis=1).values * E5,
+                         index=NO2["wilayah"].values)
+for nama in ["Kota Surabaya", "Purbalingga", "Ponorogo"]:
+    acuan = RINGKASAN["wilayah_kajian"][nama]
+    sama([ARAS[nama], ARAS_LEBARAN[nama]], [acuan["aras"], acuan["aras_lebaran"]], pesan="kadar " + nama)
+tl4b = pd.read_csv(os.path.join(OLAHAN, "TL_4b_anggota_kelompok.csv"))
+sama(ARAS[tl4b["wilayah"]].round(2).values, tl4b["NO2_hari_biasa"].values, 1e-6, "TL_4b kadar hari biasa")
+t41 = pd.read_csv(os.path.join(OLAHAN, "T4_1_perubahan_empat_wilayah.csv")).set_index("wilayah")
+for nama in ["Kota Surabaya", "Purbalingga", "Ponorogo"]:
+    sama(round(ARAS[nama], 2), t41.loc[nama, "NO2_hari_biasa_1e-5_mol_m2"], 1e-6, "T4_1 " + nama)
+
+print("cocok dengan Data/02_olahan: se-Jawa %.2f persen, %d dari 7 tahun turun, p %.4f, %d wilayah naik, "
+      "kadar NO2 hari biasa %d wilayah"
+      % (SEJAWA["gab"]["rerata"], SEJAWA["gab"]["turun"], SEJAWA["gab"]["p"], NAIK, len(tl4b)))
 
 
 # -------------------------------------------------- penyederhanaan poligon
@@ -200,13 +215,16 @@ def sederhanakan(geom):
     return {"type": "MultiPolygon", "coordinates": hasil}
 
 
-fitur, titik_awal, titik_akhir = [], 0, 0
+fitur, kotak, titik_awal, titik_akhir = [], [], 0, 0
 for _, r in NO2.iterrows():
     geom = json.loads(r[".geo"])
     titik_awal += sum(len(c) for b in poligon_dari_geometri(geom) for c in b)
     sederhana = sederhanakan(geom)
     titik_akhir += sum(len(c) for b in sederhana["coordinates"] for c in b)
     fitur.append({"type": "Feature", "id": r["wilayah"], "properties": {}, "geometry": sederhana})
+    # kotak batas tiap wilayah, dipakai dasbor untuk memperbesar peta ke wilayah terpilih
+    semua = np.array([xy for b in sederhana["coordinates"] for c in b for xy in c])
+    kotak.append(semua.min(axis=0).tolist() + semua.max(axis=0).tolist())
 print("titik poligon: %d menjadi %d" % (titik_awal, titik_akhir))
 
 # garis batas provinsi, cukup sebagai garis lon/lat yang dipisah null
@@ -254,6 +272,7 @@ DATA = {
     "periode": {p: {"nama": n, "jendela": j} for p, (n, j) in PERIODE.items()},
     "wilayah": NO2["wilayah"].tolist(),
     "provinsi": [NAMA_PROVINSI.get(p, p) for p in NO2["provinsi"]],
+    "kotak": kotak,      # [bujur min, lintang min, bujur maks, lintang maks] tiap wilayah
     "nilai": nilai,
     "sejawa": {p: {"per_tahun": bulat(SEJAWA[p]["per_tahun"], 2),
                    "rerata": round(SEJAWA[p]["rerata"], 2),

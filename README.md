@@ -5,7 +5,7 @@
 Undergraduate thesis, Meteorology, Institut Teknologi Bandung (2026), by Arya Perdana Putra Nasution.
 Supervisors: Musa Ali Mustofa, S.Si., M.Si. and Rachmy Fitriani, S.Si., M.Si.
 
-**Live dashboard: [aryaanstt.github.io/no2-lebaran-java](https://aryaanstt.github.io/no2-lebaran-java/)**: an interactive map of the anomaly for every regency and city, by year and period, with a yearly chart for any region you click.
+**Live dashboard: [aryaanstt.github.io/no2-lebaran-java](https://aryaanstt.github.io/no2-lebaran-java/)**: an interactive map of every regency and city that switches between the Lebaran anomaly (%) and the NO₂ column itself, by year and period. Pick any of the 117 regions from the searchable list, or click it on the map, to zoom in and see its yearly reference vs. Lebaran NO₂ and anomaly.
 
 ![NO₂ anomaly during Lebaran](Gambar/G4_04_anomali.png)
 *NO₂ anomaly during the 15 days of Lebaran compared with normal days, 2019–2025 average: (a) at 0.01° grid resolution, (b) per regency and city. Blue means lower NO₂ than normal. Figure labels are in Indonesian, as in the original thesis.*
@@ -85,7 +85,7 @@ The dashboard is a static page in `docs/` (`index.html` plus `data.js`), served 
 python Script/buat_dashboard.py
 ```
 
-The script recomputes the anomalies from `Data/01_mentah` with the same formula as the analysis, checks every number against `Data/02_olahan` (it stops if anything differs), simplifies the region polygons, and writes `docs/data.js` (about 0.4 MB). Open `docs/index.html` directly in a browser to view it locally; the chart library (Plotly) loads from a CDN, so an internet connection is needed.
+The script recomputes the anomalies and NO₂ columns from `Data/01_mentah` with the same formulas as the analysis, checks them against `Data/02_olahan` (it stops if anything differs), simplifies the region polygons, and writes `docs/data.js` (about 0.4 MB). Open `docs/index.html` directly in a browser to view it locally; the chart library (Plotly) loads from a CDN, so an internet connection is needed.
 
 ## Repository structure
 

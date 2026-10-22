@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NO₂ over Java during Lebaran</title>
 <link rel="icon" href="data:,">
-<meta name="description" content="Interactive map of tropospheric NO₂ change over 117 regencies and cities in Java during Lebaran (Eid al-Fitr), 2019–2025, from Sentinel-5P.">
+<meta name="description" content="Interactive map of tropospheric NO₂ over 117 regencies and cities in Java during Lebaran (Eid al-Fitr), 2019–2025, from Sentinel-5P.">
 <style>
   :root {
     color-scheme: light;
@@ -18,11 +18,15 @@
     --axis: #c3c2b7;
     --border: rgba(11, 11, 11, 0.10);
     --accent: #2a78d6;
+    /* diverging: anomaly */
     --down-3: #104281; --down-2: #3987e5; --down-1: #b7d3f6;
     --mid: #e8e7e2;
     --up-1: #f6c2bb; --up-2: #e34948; --up-3: #9e2324;
+    /* sequential: NO2 column, light to dark */
+    --seq-0: #fbe9dc; --seq-1: #f6bf9c; --seq-2: #ee8d5c; --seq-3: #d95926; --seq-4: #a3401a; --seq-5: #5f2610;
     --nodata: #b9b8b0;
     --bar-down: #2a78d6; --bar-up: #e34948;
+    --bar-ref: #77756f; --bar-leb: #eb6834;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -39,8 +43,10 @@
       --down-3: #cde2fb; --down-2: #5598e7; --down-1: #184f95;
       --mid: #383835;
       --up-1: #7d2a2a; --up-2: #e66767; --up-3: #f6c2bb;
+      --seq-0: #2e231d; --seq-1: #5a2f1c; --seq-2: #94401c; --seq-3: #d95926; --seq-4: #f09a6e; --seq-5: #fbd7c2;
       --nodata: #5c5b56;
       --bar-down: #3987e5; --bar-up: #e66767;
+      --bar-ref: #8f8d86; --bar-leb: #d95926;
     }
   }
   :root[data-theme="dark"] {
@@ -57,8 +63,10 @@
     --down-3: #cde2fb; --down-2: #5598e7; --down-1: #184f95;
     --mid: #383835;
     --up-1: #7d2a2a; --up-2: #e66767; --up-3: #f6c2bb;
+    --seq-0: #2e231d; --seq-1: #5a2f1c; --seq-2: #94401c; --seq-3: #d95926; --seq-4: #f09a6e; --seq-5: #fbd7c2;
     --nodata: #5c5b56;
     --bar-down: #3987e5; --bar-up: #e66767;
+    --bar-ref: #8f8d86; --bar-leb: #d95926;
   }
 
   * { box-sizing: border-box; }
@@ -71,6 +79,7 @@
   main { max-width: 1180px; margin: 0 auto; padding: 28px 16px 48px; }
   h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
   h2 { font-size: 1rem; margin: 0 0 4px; }
+  h3 { font-size: 0.9rem; margin: 0 0 2px; color: var(--ink-2); font-weight: 600; }
   p { margin: 0 0 10px; }
   a { color: var(--accent); }
   .lede { color: var(--ink-2); max-width: 70ch; }
@@ -96,7 +105,7 @@
     margin-bottom: 12px;
   }
   .controls .group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .controls .name { font-size: 0.85rem; color: var(--ink-2); margin-right: 4px; }
+  .controls .name { font-size: 0.85rem; color: var(--ink-2); margin-right: 4px; min-width: 44px; }
   .seg {
     display: inline-flex; flex-wrap: wrap;
     border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
@@ -110,21 +119,34 @@
   .seg button:last-child { border-right: 0; }
   .seg button:hover { background: var(--grid); }
   .seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); font-weight: 600; }
+  input[type="search"], select, .btn {
+    font: inherit; font-size: 0.85rem; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--axis); border-radius: 8px;
+    padding: 5px 9px; min-height: 32px;
+  }
+  input[type="search"] { width: 170px; }
+  select { max-width: 100%; }
+  .btn { cursor: pointer; }
+  .btn:hover { background: var(--grid); }
+  .picker { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  #matchCount { font-size: 0.8rem; color: var(--muted); }
 
   /* Java is about three times wider than it is tall, so the map takes the full width */
   #map { width: 100%; aspect-ratio: 2.5 / 1; min-height: 240px; }
-  #regionChart, #javaChart { height: 290px; }
+  #concChart, #anomChart, #javaChart { height: 270px; }
   .panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; align-items: baseline; }
   .hint { font-size: 0.8rem; color: var(--muted); }
 
+  .region-card { margin-top: 14px; }
+  .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; margin-top: 6px; }
+  .pair > div { min-width: 0; }
   .below { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; }
   .below > .card { min-width: 0; }
-  .ranks-card { margin-top: 14px; }
-  .ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; }
+  .ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
   table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   th { text-align: left; font-weight: 600; color: var(--ink-2); padding: 4px 0; border-bottom: 1px solid var(--axis); }
   td { padding: 4px 0; border-bottom: 1px solid var(--grid); }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 8px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 8px; }
   tbody tr { cursor: pointer; }
   tbody tr:hover td { background: var(--grid); }
   .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
@@ -135,12 +157,14 @@
   .error { color: var(--up-2); }
 
   @media (max-width: 860px) {
-    .below { grid-template-columns: 1fr; }
+    .below, .pair { grid-template-columns: 1fr; }
   }
   @media (max-width: 520px) {
     h1 { font-size: 1.4rem; }
     .stat .value { font-size: 1.4rem; }
     .ranks { grid-template-columns: 1fr; }
+    input[type="search"] { width: 100%; }
+    .picker select { width: 100%; }
   }
 </style>
 </head>
@@ -165,6 +189,10 @@
 
   <section class="controls" aria-label="Map options">
     <div class="group">
+      <span class="name" id="modeLabel">Show</span>
+      <div class="seg" id="modeButtons" role="group" aria-labelledby="modeLabel"></div>
+    </div>
+    <div class="group">
       <span class="name" id="yearLabel">Year</span>
       <div class="seg" id="yearButtons" role="group" aria-labelledby="yearLabel"></div>
     </div>
@@ -172,43 +200,61 @@
       <span class="name" id="periodLabel">Period</span>
       <div class="seg" id="periodButtons" role="group" aria-labelledby="periodLabel"></div>
     </div>
+    <div class="group">
+      <label class="name" for="regionSelect">Region</label>
+      <div class="picker">
+        <input type="search" id="regionSearch" placeholder="Search 117 regions…" aria-label="Search regions" autocomplete="off">
+        <select id="regionSelect" aria-label="Choose a regency or city"></select>
+        <span id="matchCount" aria-live="polite"></span>
+      </div>
+    </div>
   </section>
 
   <section class="card">
     <div class="panel-head">
       <h2 id="mapTitle">NO₂ anomaly</h2>
-      <span class="hint">Hover for values, click a region for its yearly chart</span>
+      <span class="hint">Hover for values, click a region to select it</span>
     </div>
     <p class="small" id="mapNote"></p>
-    <div id="map" role="img" aria-label="Choropleth map of NO2 anomaly per regency and city in Java"></div>
+    <div id="map" role="img" aria-label="Choropleth map of NO2 per regency and city in Java"></div>
+    <button type="button" class="btn" id="zoomButton"></button>
+  </section>
+
+  <section class="card region-card">
+    <h2 id="regionTitle">Region</h2>
+    <p class="small" id="regionNote"></p>
+    <div class="pair">
+      <div>
+        <h3 id="concTitle">NO₂ column per year</h3>
+        <div id="concChart"></div>
+      </div>
+      <div>
+        <h3 id="anomTitle">Anomaly per year</h3>
+        <div id="anomChart"></div>
+      </div>
+    </div>
   </section>
 
   <section class="below">
-    <div class="card">
-      <h2 id="regionTitle">Region</h2>
-      <p class="small" id="regionNote"></p>
-      <div id="regionChart"></div>
-    </div>
     <div class="card">
       <h2 id="javaTitle">Java-wide anomaly per year</h2>
       <p class="small" id="javaNote"></p>
       <div id="javaChart"></div>
     </div>
-  </section>
-
-  <section class="card ranks-card">
+    <div class="card">
       <h2 id="rankTitle">Largest changes</h2>
       <p class="small">Same selection as the map. Click a row to open that region.</p>
       <div class="ranks">
-        <table aria-label="Largest decreases">
-          <thead><tr><th>Largest decreases</th><th class="num">Anomaly</th></tr></thead>
-          <tbody id="rankDown"></tbody>
+        <table>
+          <thead><tr><th id="rankHeadA">Largest decreases</th><th class="num" id="rankUnitA">Anomaly</th></tr></thead>
+          <tbody id="rankA"></tbody>
         </table>
-        <table aria-label="Largest increases">
-          <thead><tr><th>Largest increases</th><th class="num">Anomaly</th></tr></thead>
-          <tbody id="rankUp"></tbody>
+        <table>
+          <thead><tr><th id="rankHeadB">Largest increases</th><th class="num" id="rankUnitB">Anomaly</th></tr></thead>
+          <tbody id="rankB"></tbody>
         </table>
       </div>
+    </div>
   </section>
 
   <section class="card method">
@@ -216,6 +262,7 @@
     <ul>
       <li><b>Data:</b> daily Sentinel-5P TROPOMI tropospheric NO₂ column (<code>COPERNICUS/S5P/OFFL/L3_NO2</code>), averaged per regency and city (FAO GAUL 2015 level 2) in Google Earth Engine. Negative retrievals are removed before averaging.</li>
       <li><b>Periods:</b> homecoming H−7 to H0, return H+1 to H+7, combined H−7 to H+7, where H0 is Eid day. Reference (normal days): H−60 to H−31 and H+30 to H+59 of the same year.</li>
+      <li><b>NO₂ column:</b> the mean tropospheric column in the chosen window, in ×10⁻⁵ mol/m². Values range from about 0.4 in rural areas to 20 over Jakarta, so the map colours use a logarithmic scale. The 7-year view is the mean of the seven yearly values.</li>
       <li><b>Anomaly:</b> (Lebaran − reference) / reference × 100%, per region and year. The 7-year mean is the mean of the seven yearly anomalies. The Java value is the unweighted mean over the 117 regions.</li>
       <li><b>Significance:</b> Wilcoxon signed-rank test on the seven yearly values, exact distribution. DKI Jakarta in the key numbers is the whole province as one area; on the map it appears as its five cities.</li>
       <li><b>Limits:</b> the satellite sees the whole tropospheric column at about 13:30 local time, not ground-level air, and clouds leave gaps (grey regions have no valid data in that window). Polygons are simplified for the web.</li>
@@ -242,8 +289,20 @@
 
   var YEARS = D.tahun;
   var N = D.wilayah.length;
-  var state = { year: "mean", period: "gab", region: D.wilayah.indexOf("Kota Surabaya") };
-  var PLOT_CONFIG = { displayModeBar: false, responsive: true };
+  var JAVA_FRAME = { lon: [105.05, 116.35], lat: [-8.85, -5.15] };
+  var UNIT = " ×10⁻⁵ mol/m²";
+  var CONC_TICKS = [0.5, 1, 2, 4, 8, 16];          // log colour scale for the NO2 column
+  var REF_LABEL = { nama: "Reference", jendela: "H−60 to H−31, H+30 to H+59" };
+  var state = {
+    mode: "anom",           // "anom" = anomaly (%), "conc" = NO2 column
+    year: "mean",
+    period: "gab",          // "ref" (column mode only), "gab", "mudik", "balik"
+    region: D.wilayah.indexOf("Kota Surabaya"),
+    zoom: null,             // index of the region the map is zoomed to, or null for all of Java
+    zoomRev: 0
+  };
+  var PLOT_CONFIG = { displayModeBar: false, responsive: true, scrollZoom: false };
+  var FONT = "system-ui, -apple-system, Segoe UI, sans-serif";
 
   // ---------- formatting
   function pct(v, digits) {
@@ -254,19 +313,24 @@
   }
   function num(v) { return v === null || v === undefined ? "no data" : v.toFixed(2); }
   function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
-  function periodName(p) { return D.periode[p].nama.toLowerCase() + " (" + D.periode[p].jendela + ")"; }
+  function periodInfo(p) { return p === "ref" ? REF_LABEL : D.periode[p]; }
+  function periodName(p) { return periodInfo(p).nama.toLowerCase() + " (" + periodInfo(p).jendela + ")"; }
   function selectionLabel() { return state.year === "mean" ? "2019–2025 mean" : String(state.year); }
+  // Lebaran window used for anomalies and region charts; "Reference" alone has no anomaly, so it pairs with combined
+  function lebPeriod() { return state.period === "ref" ? "gab" : state.period; }
 
   // ---------- values for the current selection
   function current() {
-    var v = D.nilai[state.period];
-    if (state.year === "mean") return { anom: v.anom_rerata, ref: v.acuan_rerata, leb: v.lebaran_rerata };
-    var i = YEARS.indexOf(state.year);
-    return {
-      anom: v.anom.map(function (r) { return r[i]; }),
-      ref: v.acuan.map(function (r) { return r[i]; }),
-      leb: v.lebaran.map(function (r) { return r[i]; })
+    var v = D.nilai[lebPeriod()];
+    var k = state.year === "mean" ? -1 : YEARS.indexOf(state.year);
+    function pick(rows, mean) { return k < 0 ? mean : rows.map(function (r) { return r[k]; }); }
+    var c = {
+      ref: pick(v.acuan, v.acuan_rerata),
+      leb: pick(v.lebaran, v.lebaran_rerata),
+      anom: pick(v.anom, v.anom_rerata)
     };
+    c.value = state.mode === "anom" ? c.anom : (state.period === "ref" ? c.ref : c.leb);
+    return c;
   }
 
   // ---------- key numbers
@@ -284,8 +348,8 @@
     }).join("");
   }
 
-  // ---------- controls
-  function makeButtons(id, items, key) {
+  // ---------- segmented buttons
+  function renderButtons(id, items, key) {
     var box = document.getElementById(id);
     box.innerHTML = "";
     items.forEach(function (it) {
@@ -295,169 +359,303 @@
       b.setAttribute("aria-pressed", String(state[key] === it.value));
       b.addEventListener("click", function () {
         state[key] = it.value;
-        Array.prototype.forEach.call(box.children, function (c, j) {
-          c.setAttribute("aria-pressed", String(items[j].value === it.value));
-        });
+        if (state.mode === "anom" && state.period === "ref") state.period = "gab";
         renderAll();
       });
       box.appendChild(b);
     });
   }
 
+  function renderControls() {
+    renderButtons("modeButtons", [
+      { label: "Anomaly (%)", value: "anom" },
+      { label: "NO₂ column", value: "conc" }
+    ], "mode");
+    renderButtons("yearButtons",
+      [{ label: "2019–2025 mean", value: "mean" }].concat(YEARS.map(function (y) { return { label: String(y), value: y }; })),
+      "year");
+    var periods = (state.mode === "conc" ? ["ref"] : []).concat(["gab", "mudik", "balik"]);
+    renderButtons("periodButtons", periods.map(function (p) {
+      return { label: periodInfo(p).nama + " (" + periodInfo(p).jendela + ")", value: p };
+    }), "period");
+  }
+
+  // ---------- region picker: every region, grouped by province, with a text filter
+  var select = document.getElementById("regionSelect");
+  var search = document.getElementById("regionSearch");
+
+  function buildPicker() {
+    var order = D.wilayah.map(function (_, i) { return i; }).sort(function (a, b) {
+      return D.provinsi[a].localeCompare(D.provinsi[b]) || D.wilayah[a].localeCompare(D.wilayah[b]);
+    });
+    var group = null, prov = null;
+    order.forEach(function (i) {
+      if (D.provinsi[i] !== prov) {
+        prov = D.provinsi[i];
+        group = document.createElement("optgroup");
+        group.label = prov;
+        select.appendChild(group);
+      }
+      var o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = D.wilayah[i];
+      group.appendChild(o);
+    });
+  }
+
+  function visibleOptions() {
+    return Array.prototype.filter.call(select.options, function (o) { return !o.hidden; });
+  }
+
+  function filterPicker() {
+    var q = search.value.trim().toLowerCase();
+    Array.prototype.forEach.call(select.querySelectorAll("optgroup"), function (g) {
+      var any = false;
+      Array.prototype.forEach.call(g.children, function (o) {
+        var i = Number(o.value);
+        var hit = !q || D.wilayah[i].toLowerCase().indexOf(q) >= 0 || D.provinsi[i].toLowerCase().indexOf(q) >= 0;
+        o.hidden = !hit;
+        o.disabled = !hit;
+        any = any || hit;
+      });
+      g.hidden = !any;
+    });
+    var n = visibleOptions().length;
+    document.getElementById("matchCount").textContent = q ? n + " match" + (n === 1 ? "" : "es") : "";
+    // one or more matches: show the first one right away
+    var first = visibleOptions()[0];
+    if (q && first && Number(first.value) !== state.region) selectRegion(Number(first.value), true);
+  }
+
   // ---------- map
-  function colorscale() {
+  function anomColorscale() {
     return [
       [0, css("--down-3")], [0.25, css("--down-2")], [0.45, css("--down-1")],
       [0.5, css("--mid")],
       [0.55, css("--up-1")], [0.75, css("--up-2")], [1, css("--up-3")]
     ];
   }
+  function concColorscale() {
+    return [0, 0.2, 0.4, 0.6, 0.8, 1].map(function (s, j) { return [s, css("--seq-" + j)]; });
+  }
+
+  function frame() {
+    if (state.zoom === null) return JAVA_FRAME;
+    var b = D.kotak[state.zoom];
+    var cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;
+    var w = Math.max((b[2] - b[0]) * 2.6, 1.4), h = Math.max((b[3] - b[1]) * 2.6, 0.56);
+    if (w / h < 2.5) w = h * 2.5; else h = w / 2.5;     // same shape as the map box
+    return { lon: [cx - w / 2, cx + w / 2], lat: [cy - h / 2, cy + h / 2] };
+  }
 
   function renderMap() {
     var c = current();
-    var lim = state.year === "mean" ? 30 : 50;
+    var anomMode = state.mode === "anom";
     var withData = [], noData = [];
-    for (var i = 0; i < N; i++) (c.anom[i] === null ? noData : withData).push(i);
-    var lebLabel = "Lebaran NO₂, " + D.periode[state.period].nama.toLowerCase();
-    var unit = " ×10⁻⁵ mol/m²";
-    var meanNote = state.year === "mean" ? "<br><span style='font-size:11px'>mean of the seven yearly anomalies</span>" : "";
+    for (var i = 0; i < N; i++) (c.value[i] === null ? noData : withData).push(i);
+    var p = state.period;
+    var lebName = D.periode[lebPeriod()].nama.toLowerCase();
+    var meanNote = state.year === "mean"
+      ? "<br><span style='font-size:11px'>" + (anomMode ? "mean of the seven yearly anomalies" : "mean of the seven yearly values") + "</span>"
+      : "";
+    var trace;
 
+    if (anomMode) {
+      var lim = state.year === "mean" ? 30 : 50;
+      trace = {
+        z: withData.map(function (i) { return Math.max(-lim, Math.min(lim, c.anom[i])); }),
+        zmin: -lim, zmax: lim, zmid: 0, colorscale: anomColorscale(),
+        tickvals: [-lim, -lim / 2, 0, lim / 2, lim],
+        ticktext: ["≤−" + lim + "%", "−" + lim / 2 + "%", "0", "+" + lim / 2 + "%", "≥+" + lim + "%"],
+        title: "anomaly",
+        hover: "Reference NO₂: %{customdata[1]}" + UNIT + "<br>" +
+          "Lebaran NO₂, " + lebName + ": %{customdata[2]}" + UNIT + "<br>" +
+          "Anomaly: <b>%{customdata[3]}</b>"
+      };
+    } else {
+      var lo = Math.log10(CONC_TICKS[0]), hi = Math.log10(CONC_TICKS[CONC_TICKS.length - 1]);
+      trace = {
+        z: withData.map(function (i) { return Math.max(lo, Math.min(hi, Math.log10(c.value[i]))); }),
+        zmin: lo, zmax: hi, colorscale: concColorscale(),
+        tickvals: CONC_TICKS.map(Math.log10),
+        ticktext: CONC_TICKS.map(function (t, j) { return (j === 0 ? "≤" : j === CONC_TICKS.length - 1 ? "≥" : "") + t; }),
+        title: "NO₂ column, ×10⁻⁵ mol/m² (log scale)",
+        hover: p === "ref"
+          ? "Reference NO₂: <b>%{customdata[1]}</b>" + UNIT
+          : "NO₂, " + lebName + ": <b>%{customdata[2]}</b>" + UNIT + "<br>" +
+            "Reference NO₂: %{customdata[1]}" + UNIT + "<br>" +
+            "Anomaly: %{customdata[3]}"
+      };
+    }
+
+    var outline = { color: css("--surface"), width: 0.6 };
     var base = {
       type: "choropleth", geojson: D.geojson, featureidkey: "id",
       locations: noData.map(function (i) { return D.wilayah[i]; }),
       z: noData.map(function () { return 0; }),
       customdata: noData.map(function (i) { return [D.provinsi[i]]; }),
       colorscale: [[0, css("--nodata")], [1, css("--nodata")]], showscale: false,
-      marker: { line: { color: css("--surface"), width: 0.6 } },
+      marker: { line: outline },
       hovertemplate: "<b>%{location}</b> (%{customdata[0]})<br>no valid satellite data in this window<extra></extra>"
     };
     var main = {
       type: "choropleth", geojson: D.geojson, featureidkey: "id",
       locations: withData.map(function (i) { return D.wilayah[i]; }),
-      z: withData.map(function (i) { return Math.max(-lim, Math.min(lim, c.anom[i])); }),
+      z: trace.z, zmin: trace.zmin, zmax: trace.zmax, zmid: trace.zmid,
       customdata: withData.map(function (i) {
         return [D.provinsi[i], num(c.ref[i]), num(c.leb[i]), pct(c.anom[i])];
       }),
-      zmin: -lim, zmax: lim, zmid: 0,
-      colorscale: colorscale(),
-      marker: { line: { color: css("--surface"), width: 0.6 } },
+      colorscale: trace.colorscale,
+      marker: { line: outline },
       colorbar: {
-        title: { text: "anomaly", side: "top", font: { size: 12, color: css("--ink-2") } },
+        title: { text: trace.title, side: "top", font: { size: 12, color: css("--ink-2") } },
         orientation: "h", x: 0.5, xanchor: "center", y: -0.02, yanchor: "top",
         thickness: 10, len: 0.6, outlinewidth: 0,
-        tickvals: [-lim, -lim / 2, 0, lim / 2, lim],
-        ticktext: ["≤−" + lim + "%", "−" + lim / 2 + "%", "0", "+" + lim / 2 + "%", "≥+" + lim + "%"],
+        tickvals: trace.tickvals, ticktext: trace.ticktext,
         tickfont: { size: 11, color: css("--ink-2") }
       },
-      hovertemplate: "<b>%{location}</b> (%{customdata[0]})<br>" +
-        "Reference NO₂: %{customdata[1]}" + unit + "<br>" +
-        lebLabel + ": %{customdata[2]}" + unit + "<br>" +
-        "Anomaly: <b>%{customdata[3]}</b>" + meanNote + "<extra></extra>"
+      hovertemplate: "<b>%{location}</b> (%{customdata[0]})<br>" + trace.hover + meanNote + "<extra></extra>"
     };
     var provinces = {
       type: "scattergeo", mode: "lines", lon: D.batas_provinsi.lon, lat: D.batas_provinsi.lat,
       line: { color: css("--ink-2"), width: 0.8 }, hoverinfo: "skip", showlegend: false
     };
-    var sel = state.region;
     var highlight = {
       type: "choropleth", geojson: D.geojson, featureidkey: "id",
-      locations: [D.wilayah[sel]], z: [0],
+      locations: [D.wilayah[state.region]], z: [0],
       colorscale: [[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]], showscale: false,
-      marker: { line: { color: css("--ink"), width: 2 } }, hoverinfo: "skip"
+      marker: { line: { color: css("--ink"), width: 2.5 } }, hoverinfo: "skip"
     };
+    var f = frame();
     var layout = {
       geo: {
-        // fixed frame around Java, Madura and the small islands (Seribu, Karimunjawa, Bawean, Kangean)
         visible: false, projection: { type: "mercator" },
-        lonaxis: { range: [105.05, 116.35] }, lataxis: { range: [-8.85, -5.15] },
+        lonaxis: { range: f.lon }, lataxis: { range: f.lat },
         bgcolor: "rgba(0,0,0,0)"
       },
+      dragmode: false,
+      uirevision: state.zoomRev,
       margin: { l: 0, r: 0, t: 0, b: 40 },
       paper_bgcolor: "rgba(0,0,0,0)",
       showlegend: false,
       hoverlabel: { bgcolor: css("--surface"), bordercolor: css("--axis"), font: { color: css("--ink"), size: 12 } },
-      font: { family: "system-ui, -apple-system, Segoe UI, sans-serif" }
+      font: { family: FONT }
     };
     Plotly.react("map", [base, main, provinces, highlight], layout, PLOT_CONFIG);
 
-    document.getElementById("mapTitle").textContent = "NO₂ anomaly, " + selectionLabel() + ", " + D.periode[state.period].nama.toLowerCase() + " period";
-    document.getElementById("mapNote").textContent =
-      "Change during " + periodName(state.period) + " relative to normal days of the same season. Blue = less NO₂ than normal, red = more." +
+    document.getElementById("mapTitle").textContent = anomMode
+      ? "NO₂ anomaly, " + selectionLabel() + ", " + D.periode[p].nama.toLowerCase() + " period"
+      : "NO₂ column, " + selectionLabel() + ", " + periodInfo(p).nama.toLowerCase() + " period";
+    document.getElementById("mapNote").textContent = (anomMode
+      ? "Change during " + periodName(p) + " relative to normal days of the same season. Blue = less NO₂ than normal, red = more."
+      : "Mean tropospheric NO₂ column during " + periodName(p) + ". Darker = more NO₂.") +
       (noData.length ? " Grey = no valid data (" + noData.length + " region" + (noData.length > 1 ? "s" : "") + ")." : "");
+    var zb = document.getElementById("zoomButton");
+    zb.textContent = state.zoom === null ? "Zoom to " + D.wilayah[state.region] : "Show all of Java";
   }
 
   // ---------- bar charts
-  function barTrace(values, name, hoverName) {
-    var colors = values.map(function (v) { return v !== null && v > 0 ? css("--bar-up") : css("--bar-down"); });
-    var opac = YEARS.map(function (y) { return state.year === "mean" || state.year === y ? 1 : 0.4; });
+  function barLayout(values, opts) {
+    var all = values.filter(function (v) { return v !== null; });
+    if (opts.mean !== undefined) all.push(opts.mean);
+    all.push(0);
+    var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+    var pad = Math.max(opts.minPad, (hi - lo) * 0.12);
+    var layout = {
+      margin: { l: 44, r: 10, t: 8, b: 30 },
+      paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+      bargap: 0.3, bargroupgap: 0.12,
+      font: { family: FONT, color: css("--ink-2"), size: 12 },
+      xaxis: { type: "category", tickfont: { color: css("--muted") }, linecolor: css("--axis"), fixedrange: true },
+      yaxis: {
+        ticksuffix: opts.suffix || "", gridcolor: css("--grid"), zeroline: true, zerolinecolor: css("--axis"),
+        zerolinewidth: 1, tickfont: { color: css("--muted") }, fixedrange: true,
+        range: [lo < 0 ? lo - pad : 0, hi + pad]
+      },
+      showlegend: !!opts.legend,
+      legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", font: { size: 11, color: css("--ink-2") } },
+      hoverlabel: { bgcolor: css("--surface"), bordercolor: css("--axis"), font: { color: css("--ink"), size: 12 } },
+      shapes: [], annotations: []
+    };
+    if (opts.mean !== undefined && opts.mean !== null) {
+      layout.shapes.push({
+        type: "line", xref: "paper", x0: 0, x1: 1, y0: opts.mean, y1: opts.mean,
+        line: { color: css("--ink"), width: 1.5 }
+      });
+      layout.annotations.push({
+        xref: "paper", x: 1, y: opts.mean, yanchor: opts.mean < 0 ? "top" : "bottom", xanchor: "right",
+        text: "7-year mean " + pct(opts.mean, opts.digits), showarrow: false,
+        font: { size: 11, color: css("--ink") }, bgcolor: css("--surface"), borderpad: 2
+      });
+    }
+    return layout;
+  }
+
+  function yearOpacity() {
+    return YEARS.map(function (y) { return state.year === "mean" || state.year === y ? 1 : 0.4; });
+  }
+
+  function anomBars(values, hoverName) {
     return {
-      type: "bar", x: YEARS.map(String), y: values, name: name,
-      marker: { color: colors, opacity: opac, line: { width: 0 }, cornerradius: 4 },
+      type: "bar", x: YEARS.map(String), y: values, showlegend: false,
+      marker: {
+        color: values.map(function (v) { return v !== null && v > 0 ? css("--bar-up") : css("--bar-down"); }),
+        opacity: yearOpacity(), line: { width: 0 }, cornerradius: 4
+      },
       customdata: values.map(function (v) { return pct(v); }),
       hovertemplate: hoverName + " %{x}: <b>%{customdata}</b><extra></extra>"
     };
   }
 
-  function barLayout(values, meanValue, meanLabel, digits) {
-    var all = values.filter(function (v) { return v !== null; }).concat([meanValue, 0]);
-    var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
-    var pad = Math.max(3, (hi - lo) * 0.12);
-    return {
-      margin: { l: 44, r: 10, t: 10, b: 30 },
-      paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-      bargap: 0.35,
-      font: { family: "system-ui, -apple-system, Segoe UI, sans-serif", color: css("--ink-2"), size: 12 },
-      xaxis: { type: "category", tickfont: { color: css("--muted") }, linecolor: css("--axis"), fixedrange: true },
-      yaxis: {
-        ticksuffix: "%", gridcolor: css("--grid"), zeroline: true, zerolinecolor: css("--axis"),
-        zerolinewidth: 1, tickfont: { color: css("--muted") }, range: [lo - pad, hi + pad], fixedrange: true
-      },
-      showlegend: true,
-      legend: { orientation: "h", x: 0, y: 1.08, yanchor: "bottom", font: { size: 11, color: css("--ink-2") } },
-      hoverlabel: { bgcolor: css("--surface"), bordercolor: css("--axis"), font: { color: css("--ink"), size: 12 } },
-      shapes: [{
-        type: "line", xref: "paper", x0: 0, x1: 1, y0: meanValue, y1: meanValue,
-        line: { color: css("--ink"), width: 1.5 }
-      }],
-      annotations: [{
-        xref: "paper", x: 1, y: meanValue, yanchor: meanValue < 0 ? "top" : "bottom", xanchor: "right",
-        text: meanLabel + " " + pct(meanValue, digits), showarrow: false,
-        font: { size: 11, color: css("--ink") }, bgcolor: css("--surface"), borderpad: 2
-      }]
-    };
-  }
-
   function renderRegion() {
-    var i = state.region, v = D.nilai[state.period];
-    var values = v.anom[i];
-    var java = D.sejawa[state.period].per_tahun;
-    var bars = barTrace(values, D.wilayah[i], D.wilayah[i] + ",");
-    bars.showlegend = false;
+    var i = state.region, lp = lebPeriod(), v = D.nilai[lp];
+    var lebName = D.periode[lp].nama;
+    var ref = v.acuan[i], leb = v.lebaran[i], anom = v.anom[i];
+
+    // NO2 column: reference next to the Lebaran window, per year
+    function columnBars(values, name, color) {
+      return {
+        type: "bar", x: YEARS.map(String), y: values, name: name,
+        marker: { color: color, opacity: yearOpacity(), line: { width: 0 }, cornerradius: 3 },
+        customdata: values.map(num),
+        hovertemplate: name + " %{x}: <b>%{customdata}</b>" + UNIT + "<extra></extra>"
+      };
+    }
+    var concLayout = barLayout(ref.concat(leb), { minPad: 0.2, legend: true });
+    concLayout.barmode = "group";
+    Plotly.react("concChart", [
+      columnBars(ref, "Reference (normal days)", css("--bar-ref")),
+      columnBars(leb, lebName + " (" + D.periode[lp].jendela + ")", css("--bar-leb"))
+    ], concLayout, PLOT_CONFIG);
+
+    var java = D.sejawa[lp].per_tahun;
     var javaMarks = {
       type: "scatter", mode: "markers", x: YEARS.map(String), y: java, name: "Java average (same year)",
       marker: { symbol: "line-ew-open", size: 22, line: { width: 2, color: css("--muted") }, color: css("--muted") },
       customdata: java.map(function (x) { return pct(x); }),
       hovertemplate: "Java average %{x}: %{customdata}<extra></extra>"
     };
-    var layout = barLayout(values.concat(java), v.anom_rerata[i], "7-year mean");
-    Plotly.react("regionChart", [bars, javaMarks], layout, PLOT_CONFIG);
+    Plotly.react("anomChart", [anomBars(anom, D.wilayah[i] + ","), javaMarks],
+      barLayout(anom.concat(java), { minPad: 3, legend: true, suffix: "%", mean: v.anom_rerata[i] }), PLOT_CONFIG);
+
     document.getElementById("regionTitle").textContent = D.wilayah[i] + ", " + D.provinsi[i];
-    var down = values.filter(function (x) { return x !== null && x < 0; }).length;
-    var valid = values.filter(function (x) { return x !== null; }).length;
+    document.getElementById("concTitle").textContent = "NO₂ column per year," + UNIT;
+    document.getElementById("anomTitle").textContent = "Anomaly per year, " + lebName.toLowerCase() + " period";
+    var down = anom.filter(function (x) { return x !== null && x < 0; }).length;
+    var valid = anom.filter(function (x) { return x !== null; }).length;
     document.getElementById("regionNote").textContent =
-      "Anomaly per year, " + periodName(state.period) + ". Lower than normal in " + down + " of " + valid +
-      " years with data. Reference NO₂ " + num(v.acuan_rerata[i]) + " ×10⁻⁵ mol/m² (2019–2025 mean).";
+      "Reference (normal days) against the " + periodName(lp) + " window. Lower than normal in " + down + " of " + valid +
+      " years with data; 2019–2025 means: reference " + num(v.acuan_rerata[i]) + ", " + lebName.toLowerCase() + " " +
+      num(v.lebaran_rerata[i]) + UNIT + ", anomaly " + pct(v.anom_rerata[i]) + "." +
+      (state.period === "ref" ? " (The map shows the reference period; the charts pair it with the combined window.)" : "");
   }
 
   function renderJava() {
-    var j = D.sejawa[state.period];
-    var bars = barTrace(j.per_tahun, "Java", "Java,");
-    bars.showlegend = false;
-    var layout = barLayout(j.per_tahun, j.rerata, "7-year mean", 2);
-    layout.showlegend = false;
+    var lp = lebPeriod(), j = D.sejawa[lp];
+    var layout = barLayout(j.per_tahun, { minPad: 3, suffix: "%", mean: j.rerata, digits: 2 });
     layout.margin.t = 6;
-    Plotly.react("javaChart", [bars], layout, PLOT_CONFIG);
-    document.getElementById("javaTitle").textContent = "Java-wide anomaly per year, " + D.periode[state.period].nama.toLowerCase() + " period";
+    Plotly.react("javaChart", [anomBars(j.per_tahun, "Java,")], layout, PLOT_CONFIG);
+    document.getElementById("javaTitle").textContent = "Java-wide anomaly per year, " + D.periode[lp].nama.toLowerCase() + " period";
     document.getElementById("javaNote").textContent =
       "Unweighted mean over " + N + " regions. Lower than normal in " + j.turun + " of 7 years, mean " +
       pct(j.rerata, 2) + " (Wilcoxon exact p = " + j.p + "). Eid dates: " +
@@ -466,30 +664,45 @@
 
   // ---------- ranked tables (the table view of the map)
   function renderRanks() {
-    var c = current();
+    var c = current(), anomMode = state.mode === "anom";
     var idx = [];
-    for (var i = 0; i < N; i++) if (c.anom[i] !== null) idx.push(i);
-    idx.sort(function (a, b) { return c.anom[a] - c.anom[b]; });
+    for (var i = 0; i < N; i++) if (c.value[i] !== null) idx.push(i);
+    idx.sort(function (a, b) { return c.value[a] - c.value[b]; });
     function rows(list) {
       return list.map(function (i) {
-        var col = c.anom[i] > 0 ? css("--bar-up") : css("--bar-down");
-        return '<tr data-i="' + i + '"><td><span class="swatch" style="background:' + col + '"></span>' +
-          D.wilayah[i] + '</td><td class="num">' + pct(c.anom[i]) + "</td></tr>";
+        var swatch = anomMode
+          ? '<span class="swatch" style="background:' + (c.value[i] > 0 ? css("--bar-up") : css("--bar-down")) + '"></span>'
+          : "";
+        return '<tr data-i="' + i + '"><td>' + swatch + D.wilayah[i] + '</td><td class="num">' +
+          (anomMode ? pct(c.value[i]) : num(c.value[i])) + "</td></tr>";
       }).join("");
     }
-    document.getElementById("rankDown").innerHTML = rows(idx.slice(0, 10));
-    document.getElementById("rankUp").innerHTML = rows(idx.slice(-10).reverse());
-    document.getElementById("rankTitle").textContent = "Largest changes, " + selectionLabel();
+    var low = idx.slice(0, 10), high = idx.slice(-10).reverse();
+    document.getElementById("rankA").innerHTML = rows(anomMode ? low : high);
+    document.getElementById("rankB").innerHTML = rows(anomMode ? high : low);
+    document.getElementById("rankHeadA").textContent = anomMode ? "Largest decreases" : "Highest NO₂";
+    document.getElementById("rankHeadB").textContent = anomMode ? "Largest increases" : "Lowest NO₂";
+    var unit = anomMode ? "Anomaly" : "×10⁻⁵ mol/m²";
+    document.getElementById("rankUnitA").textContent = unit;
+    document.getElementById("rankUnitB").textContent = unit;
+    document.getElementById("rankTitle").textContent =
+      (anomMode ? "Largest changes, " : "Highest and lowest NO₂, ") + selectionLabel() + ", " +
+      periodInfo(state.period).nama.toLowerCase();
   }
 
-  function selectRegion(i) {
+  // ---------- selection
+  function selectRegion(i, zoom) {
     if (i < 0) return;
     state.region = i;
+    // picker and table zoom in; a map click only moves the highlight and keeps the current view
+    if (zoom) { state.zoom = i; state.zoomRev++; }
+    select.value = String(i);
     renderMap();
     renderRegion();
   }
 
   function renderAll() {
+    renderControls();
     renderMap();
     renderRegion();
     renderJava();
@@ -498,24 +711,30 @@
 
   // ---------- start
   renderStats();
-  makeButtons("yearButtons",
-    [{ label: "2019–2025 mean", value: "mean" }].concat(YEARS.map(function (y) { return { label: String(y), value: y }; })),
-    "year");
-  makeButtons("periodButtons", ["gab", "mudik", "balik"].map(function (p) {
-    return { label: D.periode[p].nama + " (" + D.periode[p].jendela + ")", value: p };
-  }), "period");
+  buildPicker();
+  select.value = String(state.region);
   renderAll();
 
   document.getElementById("map").on("plotly_click", function (ev) {
     var pt = ev.points && ev.points[0];
-    if (pt && pt.location) selectRegion(D.wilayah.indexOf(pt.location));
+    if (pt && pt.location) selectRegion(D.wilayah.indexOf(pt.location), false);
   });
-  ["rankDown", "rankUp"].forEach(function (id) {
+  select.addEventListener("change", function () { selectRegion(Number(select.value), true); });
+  search.addEventListener("input", filterPicker);
+  search.addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") { ev.preventDefault(); select.focus(); }
+  });
+  document.getElementById("zoomButton").addEventListener("click", function () {
+    state.zoom = state.zoom === null ? state.region : null;
+    state.zoomRev++;
+    renderMap();
+  });
+  ["rankA", "rankB"].forEach(function (id) {
     document.getElementById(id).addEventListener("click", function (ev) {
       var tr = ev.target.closest("tr");
       if (tr) {
-        selectRegion(Number(tr.getAttribute("data-i")));
-        document.getElementById("regionChart").scrollIntoView({ behavior: "smooth", block: "center" });
+        selectRegion(Number(tr.getAttribute("data-i")), true);
+        document.getElementById("map").scrollIntoView({ behavior: "smooth", block: "center" });
       }
     });
   });
